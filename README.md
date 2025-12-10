@@ -66,7 +66,7 @@ cp .env.example .env
 ### 4. Запустите приложение
 ```bash
 # Запустить тесты
-poetry run python run_tests.py
+poetry run python tests/run_tests.py
 # Запустить приложение
 poetry run python -m currency_parcer
 ```
