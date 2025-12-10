@@ -29,7 +29,7 @@ currency-converter/
 ├── README.md
 ├── run_tests.py # Запуск всех тестов
 └── currency_parcer/
-│ ├── init.py # CurrencyConverterApp - основной класс
+│ ├── __main__.py # CurrencyConverterApp - основной класс
 │ ├── config.py # Singleton для конфигурации
 │ ├── factory.py # Factory Method для стратегий
 │ └── strategies.py # Strategy pattern (API и Mock)
