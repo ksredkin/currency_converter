@@ -49,21 +49,12 @@ git clone https://github.com/ksredkin/currency-converter.git
 cd currency-converter
 ```
 
-### 2. Установите Poetry (если не установлен)
-```bash
-# Windows (PowerShell)
-(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
-
-# Linux/Mac
-curl -sSL https://install.python-poetry.org | python3 -
-```
-
-### 3. Установите зависимости
+### 2. Установите зависимости
 ```bash
 poetry install
 ```
 
-### 4. Настройте окружение
+### 3. Настройте окружение
 ```bash
 # Скопируйте пример конфигурации
 cp .env.example .env
@@ -72,7 +63,7 @@ cp .env.example .env
 # См. раздел "🔑 Получение API ключа" ниже
 ```
 
-### 5. Запустите приложение
+### 4. Запустите приложение
 ```bash
 # Запустить тесты
 poetry run python run_tests.py
