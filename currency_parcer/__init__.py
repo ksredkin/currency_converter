@@ -1,99 +1,97 @@
-import requests
-from dotenv import load_dotenv
-import os
 import time
+from currency_parcer.factory import ExchangeRateFactory
+from datetime import datetime, timezone, timedelta
 
-class CurrencyAPIClient:
-    def __init__(self, api_url: str, api_key: str):
-        self.api_url = api_url
-        self.api_key = api_key
+class CurrencyConverterApp:
+    def __init__(self, exchange_rate_strategy: str = "open-exchange-rates"):
+        exchange_rate_factory = ExchangeRateFactory()
+        self.exchange_rate_strategy = exchange_rate_factory.create_strategy(exchange_rate_strategy)
 
-    def get_currencies_to_usd(self) -> dict:
+        self.rates_cache = None
+        self.rates_cache_updated_at = None
+
+    def get_rates(self, force: bool = False) -> dict:
+        """Получает, кеширует и возвращает курс валют по отношению к USD"""
         try:
-            response = requests.get(self.api_url.replace("{api_key}", self.api_key))
-            response.raise_for_status()
-            return response.json().get("conversion_rates")
-        except requests.exceptions.Timeout:
-            raise Exception("Время ожидания подключения истекло.")
-        except requests.exceptions.RequestException as e:
-            raise Exception(f"Ошибка сети: {e}")
+            if not self.rates_cache or self.rates_cache_updated_at + timedelta(seconds=300) < datetime.now(timezone.utc) or force:
+                print("Обновление кеша курса валют..")
+                self.rates_cache = self.exchange_rate_strategy.get_rates()
+                self.rates_cache_updated_at = datetime.now(timezone.utc)
+            return self.rates_cache
+
         except Exception as e:
-            raise Exception(f"Ошибка при попытке получения курса валют к USD: {e}")
+            print(f"Не удалось обновить курсы: {e}")
+            if self.rates_cache:
+                print("Используются устаревшие курсы (кеш)")
+                return self.rates_cache
+            else:
+                raise Exception("Нет данных о курсах валют")
 
-class Converter:
-    def __init__(self, currencies_to_usd: dict):
-        self.currencies_to_usd = currencies_to_usd
-
-    def convert_currency(self, currency_from: str, currency_to: str) -> float:
-        if not currency_from.upper() in self.currencies_to_usd or not currency_to.upper() in self.currencies_to_usd:
+    def convert_currency(self, currency_from: str, currency_to: str) -> float | None:
+        """Возвращает отношение одной валюты к другой, при некорректных видах валют возвращает None"""
+        currencies_to_usd = self.get_rates()
+        if not currency_from.upper() in currencies_to_usd or not currency_to.upper() in currencies_to_usd:
             return None
-        return float(f"{(self.currencies_to_usd.get(currency_to.upper()) / self.currencies_to_usd.get(currency_from.upper())):.5f}")
+        return currencies_to_usd.get(currency_to.upper()) / currencies_to_usd.get(currency_from.upper())
 
-def main():
-    print("=== Парсер валют ===")
-
-    load_dotenv()
-    api_url = os.getenv("API_URL")
-    api_key = os.getenv("API_KEY")
-
-    if not api_key:
-        raise "Необходим API_KEY!"
-
-    if not api_url:
-        raise "Необходим API_URL!"
-
-    currency_api_client = CurrencyAPIClient(api_url, api_key)
-    currencies_to_usd = currency_api_client.get_currencies_to_usd()
-    converter = Converter(currencies_to_usd)
-
-    sep = lambda: print("="*40)
-
-    while True:
+    def run(self):
+        sep = lambda: print("="*40)
         sep()
-        print("""Что хотите сделать?
+        print("="*7 + " Конвертер (парсер) валют " + "="*7)
+
+        while True:
+            sep()
+            print("""Что хотите сделать?
 1 - курс валюты по отношению к введённой
 2 - курс всех валют по отношению к введённой
-3 - выход""")
-        
-        inp = input("Выбор: ")
+3 - обновить кеш курса валют
+4 - выход""")            
+            inp = input("Выбор: ")
 
-        sep()
+            sep()
 
-        match inp:
-            case "1":
-                currency_from = input("Какую валюту хотите перевести?: ")
-                currency_to = input("В какую валюту хотите перевести?: ")
-                
-                if not currency_from.upper() in currencies_to_usd or not currency_to.upper() in currencies_to_usd:
+            match inp:
+                case "1":
+                    currency_from = input("Какую валюту хотите перевести?: ")
+                    currency_to = input("В какую валюту хотите перевести?: ")
+                    
                     sep()
-                    print("Ошибка: Некорректные названия валют!")
-                    continue
-                
-                sep()
-                
-                print(f"{currency_from} = {converter.convert_currency(currency_from, currency_to)}{currency_to}")
-            case "2":
-                currency_to = input("В какую валюту хотите перевести?: ")
-                
-                if not currency_to.upper() in currencies_to_usd:
+
+                    rate = self.convert_currency(currency_from, currency_to)
+
+                    if not rate:
+                        print("Ошибка: Некорректные названия валют!")
+                        continue
+                    
+                    print(f"1 {currency_from.upper()} = {rate:.4f} {currency_to.upper()}")
+                case "2":
+                    currency_to = input("В какую валюту хотите перевести?: ")
+                    
                     sep()
-                    print("Ошибка: Некорректное названия валюты!")
-                    continue
 
-                sep()
+                    rates_keys = self.get_rates().keys()
 
-                for currency in currencies_to_usd.keys():
-                    if currency != currency_to:
-                        print(f"{currency} = {converter.convert_currency(currency, currency_to)}{currency_to}")
+                    if not currency_to.upper() in rates_keys:
+                        print("Ошибка: Некорректное названия валюты!")
+                        continue
 
-            case "3":
-                print("Выход..")
-                sep()
-                time.sleep(0.75)
-                break
+                    for currency in rates_keys:
+                        if currency != currency_to.upper():
+                            rate = self.convert_currency(currency, currency_to)
+                            print(f"1 {currency.upper()} = {rate:.4f} {currency_to.upper()}")
 
-            case any:
-                print("Ошибка: Такого варианта нет! Попробуйте снова!")
+                case "3":
+                    self.get_rates(force=True)
+
+                case "4":
+                    print("Выход..")
+                    sep()
+                    time.sleep(0.75)
+                    break
+
+                case any:
+                    print("Ошибка: Такого варианта нет! Попробуйте снова!") 
 
 if __name__ == "__main__":
-    main()
+    app = CurrencyConverterApp()
+    app.run()
